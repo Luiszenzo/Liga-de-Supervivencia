@@ -6,7 +6,9 @@ import {
   Star, 
   AlertTriangle, 
   ChevronRight,
-  Zap
+  Zap,
+  Heart,
+  HeartCrack
 } from "lucide-react";
 import { useLeague } from "../context/LeagueContext";
 import { useAuth } from "../context/AuthContext";
@@ -40,7 +42,8 @@ export const WeekPicksView = ({ onOpenAuth }) => {
     isCommissionerMode,
     setGameResult,
     correctGameResult,
-    simulateFullWeek
+    simulateFullWeek,
+    MAX_LIVES
   } = useLeague();
 
   const [confirmTeam, setConfirmTeam] = useState(null);
@@ -64,6 +67,11 @@ export const WeekPicksView = ({ onOpenAuth }) => {
     }
     if (currentPlayer?.status === "eliminated") {
       setError(`Estás eliminado desde la Semana ${currentPlayer.eliminatedWeek}. ¡Hasta la próxima temporada!`);
+      return;
+    }
+    // ANTI-CHEAT: Block if pick already locked for this week
+    if (currentWeekPick) {
+      setError(`⛔ Tu pick de esta semana ya está BLOQUEADO. No puedes cambiar tu selección una vez confirmada.`);
       return;
     }
     setConfirmTeam(teamId);
@@ -141,10 +149,22 @@ export const WeekPicksView = ({ onOpenAuth }) => {
               </>
             ) : currentPlayer?.status === "eliminated" ? (
               <span className="text-rose-400 font-semibold">
-                Eliminado en Semana {currentPlayer.eliminatedWeek}
+                Eliminado en Semana {currentPlayer.eliminatedWeek} — 0 vidas
               </span>
             ) : (
-              "Elige 1 equipo para ganar esta semana"
+              <span className="flex items-center gap-2">
+                <span>Elige 1 equipo para ganar esta semana</span>
+                <span className="flex items-center gap-0.5">
+                  {Array.from({ length: MAX_LIVES }, (_, i) => (
+                    <span key={i}>
+                      {i < (currentPlayer?.lives ?? MAX_LIVES)
+                        ? <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+                        : <HeartCrack className="w-3 h-3 text-slate-600" />
+                      }
+                    </span>
+                  ))}
+                </span>
+              </span>
             )}
           </p>
         </div>
@@ -188,10 +208,19 @@ export const WeekPicksView = ({ onOpenAuth }) => {
               <p className="text-sm text-slate-400 mb-1">
                 <span className="text-white font-bold">{team?.fullName}</span> — Semana {selectedWeek}
               </p>
-              <p className="text-xs text-amber-400 font-semibold mb-5 flex items-center justify-center gap-1.5">
-                <Lock className="w-3.5 h-3.5" />
-                Este equipo quedará BLOQUEADO para semanas futuras
-              </p>
+              <div className="mb-5 space-y-1.5">
+                <p className="text-xs text-rose-400 font-bold flex items-center justify-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  ¡ATENCIÓN! Esta selección es DEFINITIVA
+                </p>
+                <p className="text-[11px] text-amber-400 font-semibold flex items-center justify-center gap-1.5">
+                  <Lock className="w-3 h-3" />
+                  No podrás cambiar tu pick después de confirmar
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  Este equipo también quedará bloqueado para semanas futuras
+                </p>
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmTeam(null)}
@@ -235,11 +264,11 @@ export const WeekPicksView = ({ onOpenAuth }) => {
                 {/* Team pick button */}
                 <button
                   onClick={() => {
-                    if (!isFinished && !isUsed && !isCurrentPick && currentPlayer?.status !== "eliminated") {
+                    if (!isFinished && !isUsed && !isCurrentPick && !currentWeekPick && currentPlayer?.status !== "eliminated") {
                       handlePickTeam(team?.id);
                     }
                   }}
-                  disabled={isFinished || isUsed || isCurrentPick}
+                  disabled={isFinished || isUsed || isCurrentPick || (!!currentWeekPick && !isCurrentPick)}
                   className={`
                     relative flex flex-col items-center justify-between gap-1.5 p-2.5 sm:p-4 rounded-2xl border transition-all duration-200 group w-full min-h-[140px] sm:min-h-[165px]
                     ${isCurrentPick 

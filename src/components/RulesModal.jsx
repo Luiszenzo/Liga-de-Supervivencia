@@ -82,8 +82,8 @@ export const RulesModal = ({ isOpen, onClose }) => {
             </div>
 
             {/* Step 3 */}
-            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-800/60 border border-rose-500/30">
-              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 font-bold text-xs">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-800/60 border border-amber-500/30">
+              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 font-bold text-xs">
                 3
               </div>
               <div className="flex-1">
@@ -95,8 +95,23 @@ export const RulesModal = ({ isOpen, onClose }) => {
                     <XCircle className="w-3.5 h-3.5" /> Pierde
                   </span>
                 </div>
+                <p className="text-xs text-amber-300 font-semibold mt-0.5">
+                  &bull; Resultado: <strong>Pierdes 1 vida</strong> ❤️→💔 — Te quedan <strong>2 vidas</strong>. ¡Sigues en la liga!
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-slate-800/60 border border-rose-500/30">
+              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 shrink-0 font-bold text-xs">
+                ☠️
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-100">
+                  <strong className="text-white">Si pierdes tus 3 vidas:</strong>
+                </p>
                 <p className="text-xs text-rose-400 font-semibold mt-0.5">
-                  &bull; Resultado: <strong>Quedas ELIMINADO</strong>, aunque hayas acertado las dos semanas anteriores.
+                  &bull; Resultado: <strong>Quedas ELIMINADO</strong> permanentemente de la liga.
                 </p>
               </div>
             </div>
@@ -138,7 +153,8 @@ export const RulesModal = ({ isOpen, onClose }) => {
           <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
             <li><strong>1 solo pick por semana:</strong> No puedes elegir a múltiples equipos en una misma jornada.</li>
             <li><strong>Sin repetición:</strong> Un equipo utilizado queda bloqueado para siempre durante toda la temporada.</li>
-            <li><strong>Empates cuentan como eliminación:</strong> El equipo elegido debe ganar en el marcador oficial.</li>
+            <li><strong>Pick DEFINITIVO:</strong> Una vez confirmado tu pick, <strong>NO se puede cambiar</strong>. Piensa bien antes de confirmar.</li>
+            <li><strong>❤️ 3 Vidas:</strong> Cada jugador empieza con <strong>3 vidas</strong>. Pierdes 1 vida si tu equipo pierde, empata, o no haces pick. <strong>Al perder las 3, quedas eliminado.</strong></li>
             <li><strong>Autenticación con Google:</strong> Cada jugador tiene un perfil único verificado para evitar duplicados en la liga.</li>
           </ul>
         </div>

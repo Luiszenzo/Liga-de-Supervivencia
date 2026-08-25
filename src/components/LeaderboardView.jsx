@@ -8,7 +8,9 @@ import {
   ChevronUp,
   Shield,
   Users,
-  TrendingUp
+  TrendingUp,
+  Heart,
+  HeartCrack
 } from "lucide-react";
 import { useLeague } from "../context/LeagueContext";
 import { useAuth } from "../context/AuthContext";
@@ -34,7 +36,7 @@ const StatusBadge = ({ status, eliminatedWeek }) => {
 
 export const LeaderboardView = () => {
   const { user } = useAuth();
-  const { players, selectedWeek, schedule, leagueStats } = useLeague();
+  const { players, selectedWeek, schedule, leagueStats, MAX_LIVES } = useLeague();
   const [showMatrix, setShowMatrix] = useState(false);
   const [sortBy, setSortBy] = useState("status"); // 'status' | 'name'
 
@@ -43,6 +45,11 @@ export const LeaderboardView = () => {
       const order = { champion: 0, alive: 1, eliminated: 2 };
       const diff = order[a.status] - order[b.status];
       if (diff !== 0) return diff;
+      // Among alive players, sort by most lives remaining
+      if (a.status === "alive" && b.status === "alive") {
+        const liveDiff = (b.lives ?? MAX_LIVES) - (a.lives ?? MAX_LIVES);
+        if (liveDiff !== 0) return liveDiff;
+      }
       if (a.status === "eliminated" && b.status === "eliminated") {
         return (b.eliminatedWeek || 0) - (a.eliminatedWeek || 0);
       }
@@ -196,6 +203,17 @@ export const LeaderboardView = () => {
                     <p className="text-[10px] sm:text-xs text-slate-400">
                       {totalPicks} pick{totalPicks !== 1 ? "s" : ""}
                     </p>
+                    {/* Lives Hearts */}
+                    <span className="flex items-center gap-0.5">
+                      {Array.from({ length: MAX_LIVES }, (_, i) => (
+                        <span key={i}>
+                          {i < (player.lives ?? MAX_LIVES)
+                            ? <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+                            : <HeartCrack className="w-3 h-3 text-slate-600" />
+                          }
+                        </span>
+                      ))}
+                    </span>
                     {player.status === "eliminated" && player.eliminatedReason && (
                       <p className="text-[9px] sm:text-[10px] text-rose-400/90 truncate hidden xs:inline sm:inline">
                         &bull; {player.eliminatedReason}

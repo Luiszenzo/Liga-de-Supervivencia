@@ -21,6 +21,8 @@ const COMMISSIONER_EMAILS = [
   "enrirountree@gmail.com"
 ];
 
+const MAX_LIVES = 3;
+
 const LeagueContext = createContext(null);
 
 export const LeagueProvider = ({ children }) => {
@@ -165,6 +167,8 @@ export const LeagueProvider = ({ children }) => {
         email: u.email,
         avatar: u.avatar,
         status: "alive",
+        lives: MAX_LIVES,
+        livesLostHistory: [],
         eliminatedWeek: null,
         eliminatedReason: null,
         picks: firestorePicks[u.id] || {}
@@ -196,6 +200,8 @@ export const LeagueProvider = ({ children }) => {
         email: user.email,
         avatar: user.photoURL,
         status: "alive",
+        lives: MAX_LIVES,
+        livesLostHistory: [],
         eliminatedWeek: null,
         eliminatedReason: null,
         picks: userPicks
@@ -271,7 +277,7 @@ export const LeagueProvider = ({ children }) => {
     }
   };
 
-  // Recalculate survival status of all players based on completed games
+  // Recalculate survival status of all players based on completed games (3 LIVES system)
   const recalculateSurvivorStatuses = (currentSchedule, currentPlayers) => {
     let updatedPlayers = [...currentPlayers];
     
@@ -296,51 +302,70 @@ export const LeagueProvider = ({ children }) => {
     });
 
     updatedPlayers = updatedPlayers.map((player) => {
-      let isAlive = true;
+      let lives = MAX_LIVES;
       let eliminatedWeek = null;
       let eliminatedReason = null;
+      const livesLostHistory = []; // Track which weeks a life was lost
 
       // Check chronologically week 1 through 18
       for (let w = 1; w <= 18; w++) {
         const userPick = player.picks ? player.picks[w] : null;
         const weekGames = currentSchedule.find((sw) => sw.week === w)?.games || [];
         const hasFinishedGames = weekGames.some((g) => g.winner);
+        const allFinished = weekGames.every((g) => g.winner);
 
-        // If games have finished this week
-        if (hasFinishedGames && weekGames.every((g) => g.winner)) {
+        // If all games have finished this week
+        if (hasFinishedGames && allFinished) {
           if (!userPick) {
-            isAlive = false;
-            eliminatedWeek = w;
-            eliminatedReason = `No registró selección en la Semana ${w}`;
-            break;
+            // No pick = lose a life
+            lives--;
+            livesLostHistory.push({ week: w, reason: `Sin selección en Semana ${w}` });
+            if (lives <= 0) {
+              eliminatedWeek = w;
+              eliminatedReason = `Perdió sus ${MAX_LIVES} vidas. Última: sin selección en Semana ${w}`;
+              break;
+            }
+            continue;
           }
 
           const pickResult = weekResults[w] ? weekResults[w][userPick] : null;
           if (pickResult === "loss") {
-            isAlive = false;
-            eliminatedWeek = w;
+            lives--;
             const team = getTeamById(userPick);
-            eliminatedReason = `Perdió en Semana ${w} con ${team ? team.fullName : userPick}`;
-            break;
+            livesLostHistory.push({ week: w, reason: `${team ? team.fullName : userPick} perdió` });
+            if (lives <= 0) {
+              eliminatedWeek = w;
+              eliminatedReason = `Perdió sus ${MAX_LIVES} vidas. Última: ${team ? team.fullName : userPick} perdió en Semana ${w}`;
+              break;
+            }
           } else if (pickResult === "tie") {
-            isAlive = false;
-            eliminatedWeek = w;
+            lives--;
             const team = getTeamById(userPick);
-            eliminatedReason = `Empató en Semana ${w} con ${team ? team.fullName : userPick} (Empate = Eliminado)`;
-            break;
+            livesLostHistory.push({ week: w, reason: `${team ? team.fullName : userPick} empató` });
+            if (lives <= 0) {
+              eliminatedWeek = w;
+              eliminatedReason = `Perdió sus ${MAX_LIVES} vidas. Última: empate con ${team ? team.fullName : userPick} en Semana ${w}`;
+              break;
+            }
           }
         } else if (userPick && weekResults[w] && weekResults[w][userPick] === "loss") {
-          isAlive = false;
-          eliminatedWeek = w;
+          // Partial week finished, but user's game is done and they lost
+          lives--;
           const team = getTeamById(userPick);
-          eliminatedReason = `Perdió en Semana ${w} con ${team ? team.fullName : userPick}`;
-          break;
+          livesLostHistory.push({ week: w, reason: `${team ? team.fullName : userPick} perdió` });
+          if (lives <= 0) {
+            eliminatedWeek = w;
+            eliminatedReason = `Perdió sus ${MAX_LIVES} vidas. Última: ${team ? team.fullName : userPick} perdió en Semana ${w}`;
+            break;
+          }
         }
       }
 
       return {
         ...player,
-        status: isAlive ? "alive" : "eliminated",
+        lives,
+        livesLostHistory,
+        status: lives <= 0 ? "eliminated" : "alive",
         eliminatedWeek,
         eliminatedReason
       };
@@ -357,7 +382,7 @@ export const LeagueProvider = ({ children }) => {
     return updatedPlayers;
   };
 
-  // Make or change pick for selected week
+  // Make pick for selected week (LOCKED once confirmed — no changes allowed)
   const makePick = (week, teamId) => {
     if (!user) {
       throw new Error("Debes iniciar sesión con Google para hacer tu selección.");
@@ -366,6 +391,13 @@ export const LeagueProvider = ({ children }) => {
     if (currentPlayer && currentPlayer.status === "eliminated") {
       sounds.playEliminated();
       throw new Error(`Estás eliminado desde la Semana ${currentPlayer.eliminatedWeek}. ¡Gracias por participar!`);
+    }
+
+    // ANTI-CHEAT: Block changing an already-confirmed pick
+    if (currentPlayer?.picks?.[week]) {
+      const existingTeam = getTeamById(currentPlayer.picks[week]);
+      sounds.playEliminated();
+      throw new Error(`⚠️ Tu pick de la Semana ${week} ya está BLOQUEADO (${existingTeam?.fullName || currentPlayer.picks[week]}). No se puede cambiar una vez confirmado.`);
     }
 
     // Rule: Check if team was used in ANOTHER week
@@ -584,6 +616,8 @@ export const LeagueProvider = ({ children }) => {
       const clean = prev.map((p) => ({
         ...p,
         status: "alive",
+        lives: MAX_LIVES,
+        livesLostHistory: [],
         eliminatedWeek: null,
         eliminatedReason: null,
         picks: {}
@@ -650,7 +684,8 @@ export const LeagueProvider = ({ children }) => {
         simulateFullWeek,
         resetEntireLeague,
         leagueStats,
-        triggerConfetti
+        triggerConfetti,
+        MAX_LIVES
       }}
     >
       {children}

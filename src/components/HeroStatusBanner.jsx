@@ -7,7 +7,9 @@ import {
   AlertTriangle,
   Flame,
   Star,
-  LogIn
+  LogIn,
+  Heart,
+  HeartCrack
 } from "lucide-react";
 import { useLeague } from "../context/LeagueContext";
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +17,7 @@ import { getTeamById } from "../data/nflTeams";
 
 export const HeroStatusBanner = ({ onOpenAuth }) => {
   const { user } = useAuth();
-  const { currentPlayer, currentWeekPick, selectedWeek, leagueStats } = useLeague();
+  const { currentPlayer, currentWeekPick, selectedWeek, leagueStats, MAX_LIVES } = useLeague();
 
   if (!user) {
     return (
@@ -118,6 +120,20 @@ export const HeroStatusBanner = ({ onOpenAuth }) => {
                  : currentPlayer?.status === "eliminated" ? `💀 ELIMINADO (Sem. ${currentPlayer.eliminatedWeek})`
                  : "🟢 VIVO"}
               </span>
+              {/* Lives Hearts - Mobile */}
+              <div className="flex items-center gap-0.5 mt-1">
+                {Array.from({ length: MAX_LIVES }, (_, i) => (
+                  <span key={i}>
+                    {i < (currentPlayer?.lives ?? MAX_LIVES)
+                      ? <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                      : <HeartCrack className="w-3.5 h-3.5 text-slate-600" />
+                    }
+                  </span>
+                ))}
+                <span className="text-[9px] font-bold text-slate-400 ml-1">
+                  {currentPlayer?.lives ?? MAX_LIVES}/{MAX_LIVES}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -148,6 +164,21 @@ export const HeroStatusBanner = ({ onOpenAuth }) => {
 
           {currentPlayer?.status !== "eliminated" && (
             <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-400">
+              {/* Lives Hearts - Desktop */}
+              <span className="flex items-center gap-1">
+                {Array.from({ length: MAX_LIVES }, (_, i) => (
+                  <span key={i}>
+                    {i < (currentPlayer?.lives ?? MAX_LIVES)
+                      ? <Heart className="w-4 h-4 text-rose-500 fill-rose-500 drop-shadow-sm" />
+                      : <HeartCrack className="w-4 h-4 text-slate-600" />
+                    }
+                  </span>
+                ))}
+                <span className="font-bold ml-0.5">
+                  {currentPlayer?.lives ?? MAX_LIVES} vida{(currentPlayer?.lives ?? MAX_LIVES) !== 1 ? "s" : ""}
+                </span>
+              </span>
+              <span>·</span>
               <span className="flex items-center gap-1">
                 <Flame className="w-3.5 h-3.5 text-amber-400" />
                 {Object.values(currentPlayer?.picks || {}).filter(Boolean).length} pick{Object.values(currentPlayer?.picks || {}).filter(Boolean).length !== 1 ? "s" : ""} realizados
@@ -157,6 +188,17 @@ export const HeroStatusBanner = ({ onOpenAuth }) => {
                 <Lock className="w-3.5 h-3.5 text-rose-400" />
                 {Object.values(currentPlayer?.picks || {}).filter(Boolean).length} equipo{Object.values(currentPlayer?.picks || {}).filter(Boolean).length !== 1 ? "s" : ""} bloqueado{Object.values(currentPlayer?.picks || {}).filter(Boolean).length !== 1 ? "s" : ""}
               </span>
+            </div>
+          )}
+
+          {/* Lives lost history */}
+          {currentPlayer?.livesLostHistory?.length > 0 && currentPlayer?.status !== "eliminated" && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {currentPlayer.livesLostHistory.map((loss, idx) => (
+                <span key={idx} className="text-[10px] text-rose-400/80 bg-rose-500/10 border border-rose-500/15 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                  <HeartCrack className="w-2.5 h-2.5" /> Sem. {loss.week}: {loss.reason}
+                </span>
+              ))}
             </div>
           )}
         </div>
