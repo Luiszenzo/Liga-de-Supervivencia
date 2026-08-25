@@ -136,13 +136,19 @@ export const Navbar = ({ onOpenRules, onOpenAuth, onOpenTeams, activeTab, setAct
               <div className="relative">
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center gap-2 p-1.5 pr-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition-all"
+                  className="flex items-center gap-2 p-1 sm:p-1.5 sm:pr-3 rounded-full sm:rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 active:scale-95 transition-all"
+                  title="Mi perfil"
                 >
                   <img
                     src={user.photoURL}
                     alt={user.name}
-                    className="w-7 h-7 rounded-lg object-cover ring-1 ring-slate-700"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-blue-500/40 shrink-0"
                     referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user.name || "NFL")}&backgroundColor=1e293b&textColor=38bdf8`;
+                    }}
                   />
                   <div className="text-left hidden sm:block">
                     <p className="text-xs font-semibold text-slate-200 leading-tight truncate max-w-[110px]">
@@ -168,18 +174,22 @@ export const Navbar = ({ onOpenRules, onOpenAuth, onOpenTeams, activeTab, setAct
                   </div>
                 </button>
 
-                {/* Dropdown Menu */}
+                {/* Dropdown Menu (Responsive positioning for mobile and desktop) */}
                 {isUserMenuOpen && (
                   <div 
-                    className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900/95 border border-slate-800 p-3 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150"
-                    onMouseLeave={() => setIsUserMenuOpen(false)}
+                    className="fixed inset-x-3 top-16 sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-64 rounded-2xl bg-slate-900/98 border border-slate-700/80 p-3.5 shadow-2xl backdrop-blur-2xl z-50 animate-in fade-in zoom-in-95 duration-150"
                   >
                     <div className="flex items-center gap-3 pb-3 mb-3 border-b border-slate-800">
                       <img
                         src={user.photoURL}
                         alt={user.name}
-                        className="w-10 h-10 rounded-xl object-cover ring-2 ring-blue-500/30"
+                        className="w-10 h-10 rounded-full object-cover ring-2 ring-blue-500/40 shrink-0"
                         referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user.name || "NFL")}&backgroundColor=1e293b&textColor=38bdf8`;
+                        }}
                       />
                       <div className="overflow-hidden">
                         <p className="font-bold text-sm text-white truncate">{user.name}</p>

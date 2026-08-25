@@ -73,31 +73,57 @@ export const HeroStatusBanner = ({ onOpenAuth }) => {
         )}
       </div>
 
-      <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          <img
-            src={user.photoURL}
-            alt={user.name}
-            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover ring-2 ${
-              currentPlayer?.status === "champion" ? "ring-amber-400/60" :
-              currentPlayer?.status === "eliminated" ? "ring-rose-500/40" :
-              "ring-emerald-400/40"
-            }`}
-            referrerPolicy="no-referrer"
-          />
-          <div className={`absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full ring-2 ring-slate-900 flex items-center justify-center text-sm ${
-            currentPlayer?.status === "champion" ? "bg-amber-500" :
-            currentPlayer?.status === "eliminated" ? "bg-rose-600" :
-            "bg-emerald-500"
-          }`}>
-            {currentPlayer?.status === "champion" ? "👑" :
-             currentPlayer?.status === "eliminated" ? "💀" : "🏈"}
+      <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+        {/* Avatar and Main Info Container */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0">
+            <img
+              src={user.photoURL}
+              alt={user.name}
+              className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl object-cover ring-2 ${
+                currentPlayer?.status === "champion" ? "ring-amber-400/60" :
+                currentPlayer?.status === "eliminated" ? "ring-rose-500/40" :
+                "ring-emerald-400/40"
+              }`}
+              referrerPolicy="no-referrer"
+              crossOrigin="anonymous"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user.name || "NFL")}&backgroundColor=1e293b&textColor=38bdf8`;
+              }}
+            />
+            <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full ring-2 ring-slate-900 flex items-center justify-center text-xs sm:text-sm ${
+              currentPlayer?.status === "champion" ? "bg-amber-500" :
+              currentPlayer?.status === "eliminated" ? "bg-rose-600" :
+              "bg-emerald-500"
+            }`}>
+              {currentPlayer?.status === "champion" ? "👑" :
+               currentPlayer?.status === "eliminated" ? "💀" : "🏈"}
+            </div>
+          </div>
+
+          {/* Player Info on Mobile */}
+          <div className="flex-1 min-w-0 sm:hidden">
+            <p className="font-display font-black text-base text-white truncate">{user.name}</p>
+            <div className="mt-0.5">
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border inline-block ${
+                currentPlayer?.status === "champion"
+                  ? "text-amber-300 bg-amber-500/20 border-amber-500/40"
+                  : currentPlayer?.status === "eliminated"
+                  ? "text-rose-300 bg-rose-500/10 border-rose-500/20"
+                  : "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
+              }`}>
+                {currentPlayer?.status === "champion" ? "🏆 CAMPEÓN"
+                 : currentPlayer?.status === "eliminated" ? `💀 ELIMINADO (Sem. ${currentPlayer.eliminatedWeek})`
+                 : "🟢 VIVO"}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Player Info */}
-        <div className="flex-1 min-w-0">
+        {/* Player Info (Desktop view) */}
+        <div className="hidden sm:block flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-display font-black text-lg sm:text-xl text-white truncate">{user.name}</p>
             <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border ${
