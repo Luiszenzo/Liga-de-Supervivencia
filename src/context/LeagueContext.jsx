@@ -1,11 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
 import confetti from "canvas-confetti";
 import { NFL_SCHEDULE } from "../data/nflSchedule";
 import { NFL_TEAMS, getTeamById } from "../data/nflTeams";
-import { INITIAL_PLAYERS } from "../data/mockInitialLeague";
 import { useAuth } from "./AuthContext";
 import { sounds } from "../utils/soundEffects";
-import { db, doc, setDoc, getDoc, onSnapshot } from "../firebase";
+import { 
+  db, 
+  doc, 
+  setDoc, 
+  collection, 
+  onSnapshot, 
+  serverTimestamp 
+} from "../firebase";
 
 // ────────────────────────────────────────────────────────
 // Correos autorizados como Comisionados (admin de resultados)
@@ -35,18 +41,17 @@ export const LeagueProvider = ({ children }) => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Only keep real players (exclude mock and demo accounts)
-        const realOnly = parsed.filter((p) => 
-          p.id && !p.id.startsWith("user_") && !p.id.startsWith("demo_") && !p.email?.endsWith("@nflsurvivor.com")
-        );
-        localStorage.setItem("nfl_survivor_players", JSON.stringify(realOnly));
-        return realOnly;
+        return parsed.filter((p) => p.id && !p.id.startsWith("user_") && !p.id.startsWith("demo_") && !p.email?.endsWith("@nflsurvivor.com"));
       } catch (e) {
         // ignore
       }
     }
     return [];
   });
+
+  // Raw users and picks map from Firestore
+  const [firestoreUsers, setFirestoreUsers] = useState([]);
+  const [firestorePicks, setFirestorePicks] = useState({});
 
   // Admin / Commissioner Mode toggle
   const [isCommissionerMode, setIsCommissionerMode] = useState(false);
@@ -65,29 +70,145 @@ export const LeagueProvider = ({ children }) => {
     setIsMuted(next);
   };
 
-  // Ensure current user is in the players list
+  // ────────────────────────────────────────────────────────
+  // 1. Real-time Firestore Sync: Global Schedule & Results
+  // ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
-    setPlayers((prev) => {
-      const exists = prev.find((p) => p.id === user.uid || p.email === user.email);
-      if (!exists) {
-        const newPlayer = {
-          id: user.uid,
-          name: user.name,
-          email: user.email,
-          avatar: user.photoURL,
-          status: "alive",
-          eliminatedWeek: null,
-          eliminatedReason: null,
-          picks: {}
-        };
-        const updated = [newPlayer, ...prev];
-        localStorage.setItem("nfl_survivor_players", JSON.stringify(updated));
-        return updated;
-      }
-      return prev;
+    try {
+      const scheduleRef = doc(db, "league", "schedule");
+      const unsub = onSnapshot(scheduleRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (Array.isArray(data?.schedule)) {
+            setSchedule(data.schedule);
+            localStorage.setItem("nfl_survivor_schedule", JSON.stringify(data.schedule));
+          }
+        }
+      }, (err) => {
+        console.warn("Firestore schedule snapshot (offline o sin permisos):", err.code);
+      });
+      return () => unsub();
+    } catch (err) {
+      console.warn("Error setting schedule listener:", err);
+    }
+  }, []);
+
+  // ────────────────────────────────────────────────────────
+  // 2. Real-time Firestore Sync: All Registered Users
+  // ────────────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const usersCol = collection(db, "users");
+      const unsub = onSnapshot(usersCol, (snapshot) => {
+        const list = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data && docSnap.id) {
+            list.push({
+              id: docSnap.id,
+              name: data.name || "Jugador NFL",
+              email: data.email || "",
+              avatar: data.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(data.name || "NFL")}&backgroundColor=1e293b&textColor=38bdf8`,
+              joinedAt: data.createdAt || ""
+            });
+          }
+        });
+        setFirestoreUsers(list);
+      }, (err) => {
+        console.warn("Firestore users snapshot (offline o sin permisos):", err.code);
+      });
+      return () => unsub();
+    } catch (err) {
+      console.warn("Error setting users listener:", err);
+    }
+  }, []);
+
+  // ────────────────────────────────────────────────────────
+  // 3. Real-time Firestore Sync: All Weekly Picks
+  // ────────────────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const picksCol = collection(db, "picks");
+      const unsub = onSnapshot(picksCol, (snapshot) => {
+        const picksMap = {};
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data?.userId && data?.week && data?.teamId) {
+            if (!picksMap[data.userId]) {
+              picksMap[data.userId] = {};
+            }
+            picksMap[data.userId][Number(data.week)] = data.teamId;
+          }
+        });
+        setFirestorePicks(picksMap);
+      }, (err) => {
+        console.warn("Firestore picks snapshot (offline o sin permisos):", err.code);
+      });
+      return () => unsub();
+    } catch (err) {
+      console.warn("Error setting picks listener:", err);
+    }
+  }, []);
+
+  // ────────────────────────────────────────────────────────
+  // 4. Merge Users + Picks + Current User -> Players List
+  // ────────────────────────────────────────────────────────
+  useEffect(() => {
+    // Collect all unique users (from Firestore + current logged in user)
+    const userMap = new Map();
+
+    // Add Firestore users
+    firestoreUsers.forEach((u) => {
+      userMap.set(u.id, {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        avatar: u.avatar,
+        status: "alive",
+        eliminatedWeek: null,
+        eliminatedReason: null,
+        picks: firestorePicks[u.id] || {}
+      });
     });
-  }, [user]);
+
+    // Ensure current user is in the list
+    if (user) {
+      const existing = userMap.get(user.uid);
+      const userPicks = firestorePicks[user.uid] || existing?.picks || {};
+      
+      // Also merge with locally stored picks if any
+      const localPlayers = localStorage.getItem("nfl_survivor_players");
+      if (localPlayers) {
+        try {
+          const parsed = JSON.parse(localPlayers);
+          const me = parsed.find((p) => p.id === user.uid || p.email === user.email);
+          if (me?.picks) {
+            Object.assign(userPicks, me.picks);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      userMap.set(user.uid, {
+        id: user.uid,
+        name: user.name,
+        email: user.email,
+        avatar: user.photoURL,
+        status: "alive",
+        eliminatedWeek: null,
+        eliminatedReason: null,
+        picks: userPicks
+      });
+    }
+
+    const unifiedList = Array.from(userMap.values());
+    if (unifiedList.length > 0) {
+      const calculated = recalculateSurvivorStatuses(schedule, unifiedList);
+      setPlayers(calculated);
+      localStorage.setItem("nfl_survivor_players", JSON.stringify(calculated));
+    }
+  }, [firestoreUsers, firestorePicks, schedule, user]);
 
   // Current logged in player data
   const currentPlayer = useMemo(() => {
@@ -209,7 +330,6 @@ export const LeagueProvider = ({ children }) => {
             break;
           }
         } else if (userPick && weekResults[w] && weekResults[w][userPick] === "loss") {
-          // If specific game of user pick is already finished and lost
           isAlive = false;
           eliminatedWeek = w;
           const team = getTeamById(userPick);
@@ -261,7 +381,7 @@ export const LeagueProvider = ({ children }) => {
       }
     }
 
-    // Update player pick
+    // Update player pick locally
     setPlayers((prev) => {
       const updated = prev.map((p) => {
         if (p.id === user.uid || p.email === user.email) {
@@ -279,16 +399,17 @@ export const LeagueProvider = ({ children }) => {
     sounds.playPickLock();
     triggerConfetti();
 
-    // Firestore async sync — silenciado si no hay permisos configurados aún
+    // Sync Pick to Firestore for all users to see in real time
     const pickDocRef = doc(db, "picks", `${user.uid}_w${week}`);
     setDoc(pickDocRef, {
       userId: user.uid,
       userName: user.name,
+      userAvatar: user.photoURL,
       week: Number(week),
       teamId,
-      timestamp: new Date().toISOString()
+      updatedAt: serverTimestamp()
     }, { merge: true }).catch((e) => {
-      console.warn("Firestore sync (offline/sin permisos — pick guardado localmente):", e.code);
+      console.warn("Firestore sync pick (guardado localmente):", e.code || e);
     });
   };
 
@@ -318,12 +439,19 @@ export const LeagueProvider = ({ children }) => {
 
       localStorage.setItem("nfl_survivor_schedule", JSON.stringify(newSchedule));
 
+      // Sync updated schedule to Firestore for all users
+      setDoc(doc(db, "league", "schedule"), {
+        schedule: newSchedule,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch((err) => {
+        console.warn("Firestore sync schedule error:", err.code || err);
+      });
+
       // Recalculate players
       setPlayers((currentPlayers) => {
         const reevaluated = recalculateSurvivorStatuses(newSchedule, currentPlayers);
         localStorage.setItem("nfl_survivor_players", JSON.stringify(reevaluated));
 
-        // Check if current user is now champion or survived
         const updatedCurrentUser = reevaluated.find((p) => p.id === user?.uid);
         if (updatedCurrentUser?.status === "champion") {
           sounds.playSuccess();
@@ -353,11 +481,9 @@ export const LeagueProvider = ({ children }) => {
         const newGames = w.games.map((g) => {
           if (g.id !== gameId) return g;
           if (newWinnerTeamId === null) {
-            // Reset to pending
             const { winner, homeScore, awayScore, status, ...rest } = g;
             return { ...rest, status: "scheduled", winner: null, homeScore: null, awayScore: null };
           }
-          // Change winner
           const homeScore = 24, awayScore = 17;
           return {
             ...g,
@@ -371,6 +497,14 @@ export const LeagueProvider = ({ children }) => {
       });
 
       localStorage.setItem("nfl_survivor_schedule", JSON.stringify(newSchedule));
+
+      // Sync to Firestore
+      setDoc(doc(db, "league", "schedule"), {
+        schedule: newSchedule,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch((err) => {
+        console.warn("Firestore sync schedule error:", err.code || err);
+      });
 
       setPlayers((currentPlayers) => {
         const reevaluated = recalculateSurvivorStatuses(newSchedule, currentPlayers);
@@ -393,7 +527,6 @@ export const LeagueProvider = ({ children }) => {
       const newSchedule = prevSchedule.map((w) => {
         if (w.week !== Number(week)) return w;
         const newGames = w.games.map((g) => {
-          // Team with better spread or home advantage has higher chance
           const homeTeamObj = getTeamById(g.homeTeam);
           const awayTeamObj = getTeamById(g.awayTeam);
           const homeRating = (homeTeamObj?.rating || 80) + 2.5;
@@ -417,6 +550,13 @@ export const LeagueProvider = ({ children }) => {
 
       localStorage.setItem("nfl_survivor_schedule", JSON.stringify(newSchedule));
 
+      setDoc(doc(db, "league", "schedule"), {
+        schedule: newSchedule,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch((err) => {
+        console.warn("Firestore sync schedule error:", err.code || err);
+      });
+
       setPlayers((currentPlayers) => {
         const reevaluated = recalculateSurvivorStatuses(newSchedule, currentPlayers);
         localStorage.setItem("nfl_survivor_players", JSON.stringify(reevaluated));
@@ -429,35 +569,28 @@ export const LeagueProvider = ({ children }) => {
     });
   };
 
-  // Reset entire league (for test iterations)
+  // Reset entire league
   const resetEntireLeague = () => {
     sounds.playWhistle();
     setSchedule(NFL_SCHEDULE);
     localStorage.removeItem("nfl_survivor_schedule");
 
-    const cleanPlayers = INITIAL_PLAYERS.map((p) => ({
-      ...p,
-      status: "alive",
-      eliminatedWeek: null,
-      eliminatedReason: null,
-      picks: {}
-    }));
+    setDoc(doc(db, "league", "schedule"), {
+      schedule: NFL_SCHEDULE,
+      updatedAt: serverTimestamp()
+    }, { merge: true }).catch((err) => console.warn(err));
 
-    if (user) {
-      cleanPlayers.unshift({
-        id: user.uid,
-        name: user.name,
-        email: user.email,
-        avatar: user.photoURL,
+    setPlayers((prev) => {
+      const clean = prev.map((p) => ({
+        ...p,
         status: "alive",
         eliminatedWeek: null,
         eliminatedReason: null,
         picks: {}
-      });
-    }
-
-    setPlayers(cleanPlayers);
-    localStorage.setItem("nfl_survivor_players", JSON.stringify(cleanPlayers));
+      }));
+      localStorage.setItem("nfl_survivor_players", JSON.stringify(clean));
+      return clean;
+    });
   };
 
   // League stats summary
