@@ -17,13 +17,13 @@ import {
 } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCZisxquXrkT6367_CE5-hZisDtGgRC5IU",
-  authDomain: "nfl-metal.firebaseapp.com",
-  projectId: "nfl-metal",
-  storageBucket: "nfl-metal.firebasestorage.app",
-  messagingSenderId: "920827206000",
-  appId: "1:920827206000:web:a78a791d5a748c2e9a17b5",
-  measurementId: "G-LRHYYPDD69"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCZisxquXrkT6367_CE5-hZisDtGgRC5IU",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "nfl-metal.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "nfl-metal",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "nfl-metal.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "920827206000",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:920827206000:web:a78a791d5a748c2e9a17b5",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-LRHYYPDD69"
 };
 
 // Initialize Firebase safely
